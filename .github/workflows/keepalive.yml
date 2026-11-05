@@ -1,0 +1,34 @@
+# Keeps Dululu (Render free tier) awake: Render sleeps a service after ~15 minutes without visitors,
+# and a sleeping Dululu misses Slack messages. GitHub runs this every ~5 minutes (often a little later).
+name: Keep Dululu awake
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+    - cron: "0 3 1 * *" # monthly commit below
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Visit Dululu
+        run: curl -fsS --max-time 90 --retry 2 --retry-delay 5 -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" https://dululu.onrender.com/
+
+  # GitHub turns off schedules in a repo with no commits for 60 days, so commit a timestamp once a month.
+  stay-active:
+    if: github.event.schedule == '0 3 1 * *'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          date -u > last-active.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add last-active.txt
+          git commit -m "Monthly keep-active commit"
+          git push
